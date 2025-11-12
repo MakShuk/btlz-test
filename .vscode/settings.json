@@ -10,5 +10,16 @@
     "[json]": {
         "editor.defaultFormatter": "esbenp.prettier-vscode"
     },
-    "prettier.requireConfig": true
+    "prettier.requireConfig": true,
+    "files.exclude": {
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/.DS_Store": true,
+        "**/Thumbs.db": true,
+        ".vscode": true
+    },
+    "hide-files.files": [
+        ".vscode"
+    ]
 }
