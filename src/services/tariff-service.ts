@@ -1,6 +1,7 @@
 import knex from '#postgres/knex.js';
 import { BoxTariff } from '../types/wildberries.js';
 import { getDatabaseLogger } from '../utils/logger.js';
+import { TariffTransformer } from '../utils/tariff-transformer.js';
 
 // Интерфейс для тарифа в базе данных
 export interface Tariff {
@@ -435,27 +436,14 @@ export class TariffService {
    * @param warehouseId - ID склада в базе данных
    * @param tariffDate - дата тарифа
    * @returns CreateTariffRequest - данные для создания/обновления тарифа
+   * @deprecated Используйте TariffTransformer.fromBoxTariff() вместо этого метода
    */
   static fromWildberriesData(
     boxTariff: BoxTariff,
     warehouseId: number,
     tariffDate: Date | string
   ): CreateTariffRequest {
-    return {
-      warehouse_id: warehouseId,
-      tariff_date: tariffDate,
-      box_delivery_base: boxTariff.box_delivery_base,
-      box_delivery_liter: boxTariff.box_delivery_liter,
-      box_delivery_coef_expr: boxTariff.box_delivery_coef_expr,
-      box_delivery_marketplace_base: boxTariff.box_delivery_marketplace_base,
-      box_delivery_marketplace_liter: boxTariff.box_delivery_marketplace_liter,
-      box_delivery_marketplace_coef_expr: boxTariff.box_delivery_marketplace_coef_expr,
-      box_storage_base: boxTariff.box_storage_base,
-      box_storage_liter: boxTariff.box_storage_liter,
-      box_storage_coef_expr: boxTariff.box_storage_coef_expr,
-      dt_next_box: boxTariff.dt_next_box,
-      dt_till_max: boxTariff.dt_till_max,
-    };
+    return TariffTransformer.fromBoxTariff(boxTariff, warehouseId, tariffDate);
   }
 }
 

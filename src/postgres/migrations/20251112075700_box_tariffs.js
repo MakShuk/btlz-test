@@ -26,8 +26,8 @@ export async function up(knex) {
         table.decimal("box_delivery_marketplace_coef_expr", 10, 2).nullable();
 
         // Тарифы хранения
-        table.decimal("box_storage_base", 10, 4).nullable();
-        table.decimal("box_storage_liter", 10, 4).nullable();
+        table.decimal("box_storage_base", 10, 2).nullable();
+        table.decimal("box_storage_liter", 10, 2).nullable();
         table.decimal("box_storage_coef_expr", 10, 2).nullable();
 
         // Метаданные

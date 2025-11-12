@@ -4,6 +4,7 @@ import { TariffService } from './tariff-service.js';
 import { BoxTariffResponse, WarehouseData, BoxTariff, WarehouseWithTariffsData } from '../types/wildberries.js';
 import knex from '#postgres/knex.js';
 import { getServiceLogger } from '../utils/logger.js';
+import { TariffTransformer } from '../utils/tariff-transformer.js';
 
 /**
  * Результат обновления тарифов
@@ -81,18 +82,20 @@ export class TariffsUpdater {
       }
 
       // 2. Валидация данных (уже произошла в WildberriesApiClient через Zod)
-      const { warehouseList, dtTillMax } = apiResponse.response.data;
+      const { warehouseList, dtTillMax, dtNextBox } = apiResponse.response.data;
       this.logger.info('Данные получены из API', {
         date,
         warehousesCount: warehouseList.length,
-        dtTillMax
+        dtTillMax,
+        dtNextBox
       });
 
       // 3. Транзакционное сохранение данных
       const processingResult = await this.processAndSaveData(
         warehouseList,
         date,
-        dtTillMax
+        dtTillMax,
+        dtNextBox
       );
 
       warehousesProcessed = processingResult.warehousesProcessed;
@@ -177,7 +180,8 @@ export class TariffsUpdater {
   private async processAndSaveData(
     warehouseList: WarehouseWithTariffsData[],
     date: string,
-    dtTillMax: string | null = null
+    dtTillMax: string | null = null,
+    dtNextBox: string | null = null
   ): Promise<{
     warehousesProcessed: number;
     tariffsProcessed: number;
@@ -209,7 +213,7 @@ export class TariffsUpdater {
           });
 
           // Затем обрабатываем тариф для этого склада
-          await this.processTariffFromWarehouseData(warehouseData, warehouse.id, date, dtTillMax, trx);
+          await this.processTariffFromWarehouseData(warehouseData, warehouse.id, date, dtTillMax, dtNextBox, trx);
           tariffsProcessed++;
 
           if (tariffsProcessed % 10 === 0) {
@@ -335,8 +339,18 @@ export class TariffsUpdater {
     warehouseDbId: number,
     date: string,
     dtTillMax: string | null,
+    dtNextBox: string | null = null,
     trx: any
   ) {
+    // Используем единый метод преобразования данных
+    const tariffData = TariffTransformer.fromWarehouseData(
+      warehouseData,
+      warehouseDbId,
+      date,
+      dtNextBox,
+      dtTillMax
+    );
+
     // Трансформация данных: преобразование "-" в NULL уже произошло в Zod схеме
     const result = await trx.raw(`
       INSERT INTO box_tariffs (
@@ -364,19 +378,19 @@ export class TariffsUpdater {
         updated_at = CURRENT_TIMESTAMP
       RETURNING *
     `, [
-      warehouseDbId,
-      date,
-      warehouseData.boxDeliveryBase,
-      warehouseData.boxDeliveryLiter,
-      warehouseData.boxDeliveryCoefExpr,
-      warehouseData.boxDeliveryMarketplaceBase,
-      warehouseData.boxDeliveryMarketplaceLiter,
-      warehouseData.boxDeliveryMarketplaceCoefExpr,
-      warehouseData.boxStorageBase,
-      warehouseData.boxStorageLiter,
-      warehouseData.boxStorageCoefExpr,
-      null, // dt_next_box
-      dtTillMax, // dt_till_max
+      tariffData.warehouse_id,
+      tariffData.tariff_date,
+      tariffData.box_delivery_base,
+      tariffData.box_delivery_liter,
+      tariffData.box_delivery_coef_expr,
+      tariffData.box_delivery_marketplace_base,
+      tariffData.box_delivery_marketplace_liter,
+      tariffData.box_delivery_marketplace_coef_expr,
+      tariffData.box_storage_base,
+      tariffData.box_storage_liter,
+      tariffData.box_storage_coef_expr,
+      tariffData.dt_next_box,
+      tariffData.dt_till_max,
     ]);
 
     const rows = result.rows || result;
