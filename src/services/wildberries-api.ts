@@ -55,7 +55,7 @@ export class WildberriesApiClient {
   private limiter: Bottleneck;
   private axiosInstance: AxiosInstance;
   private readonly MAX_RETRIES = 3;
-  private readonly BASE_URL = 'https://suppliers-api.wildberries.ru';
+  private readonly BASE_URL: string;
   private logger = getApiLogger('WildberriesApiClient');
 
   constructor(apiKey?: string) {
@@ -65,6 +65,9 @@ export class WildberriesApiClient {
     if (!key) {
       throw new Error('API ключ Wildberries не указан. Установите переменную окружения WB_API_TOKEN или передайте ключ в конструктор.');
     }
+
+    // Получаем базовый URL из переменных окружения
+    this.BASE_URL = process.env.WB_API_BASE_URL || 'https://common-api.wildberries.ru';
 
     // Настраиваем rate limiter: 60 запросов в минуту, 5 запросов в секунду (burst)
     this.limiter = new bottleneck.default({
@@ -254,12 +257,16 @@ export class WildberriesApiClient {
    */
   private validateTariffResponse(data: unknown): BoxTariffResponse {
     try {
+      // Временно логируем сырые данные для отладки
+      this.logger.debug('Сырой ответ от API', { rawData: JSON.stringify(data, null, 2) });
+
       // Сначала валидируем базовую структуру
       const baseSchema = z.object({
         response: z.object({
           data: z.object({
             warehouseList: z.array(z.any()),
-            boxTariffs: z.array(z.any()),
+            dtNextBox: z.string().optional(),
+            dtTillMax: z.string().optional(),
           }),
           error: z.boolean().optional(),
           errorText: z.string().optional(),
@@ -269,8 +276,8 @@ export class WildberriesApiClient {
 
       const validatedData = baseSchema.parse(data);
 
-      // Затем преобразуем данные о тарифах, чтобы соответствовать схеме
-      const transformedTariffs = validatedData.response.data.boxTariffs.map((tariff: any) => {
+      // Преобразуем данные о складах в тарифы
+      const transformedTariffs = validatedData.response.data.warehouseList.map((warehouse: any) => {
         // Преобразуем строковые значения в числа, если необходимо
         const transformNumericValue = (val: any): number | null => {
           if (val === null || val === undefined || val === '-' || val === '') {
@@ -287,19 +294,26 @@ export class WildberriesApiClient {
           return null;
         };
 
+        // Генерируем warehouseId на основе имени склада
+        const warehouseId = warehouse.warehouseName
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, '_')
+          .replace(/_+/g, '_')
+          .replace(/^_|_$/g, '');
+
         return {
-          warehouseId: tariff.warehouseId,
-          box_delivery_base: transformNumericValue(tariff.box_delivery_base),
-          box_delivery_liter: transformNumericValue(tariff.box_delivery_liter),
-          box_delivery_coef_expr: transformNumericValue(tariff.box_delivery_coef_expr),
-          box_delivery_marketplace_base: transformNumericValue(tariff.box_delivery_marketplace_base),
-          box_delivery_marketplace_liter: transformNumericValue(tariff.box_delivery_marketplace_liter),
-          box_delivery_marketplace_coef_expr: transformNumericValue(tariff.box_delivery_marketplace_coef_expr),
-          box_storage_base: transformNumericValue(tariff.box_storage_base),
-          box_storage_liter: transformNumericValue(tariff.box_storage_liter),
-          box_storage_coef_expr: transformNumericValue(tariff.box_storage_coef_expr),
-          dt_next_box: tariff.dt_next_box || null,
-          dt_till_max: tariff.dt_till_max ? new Date(tariff.dt_till_max) : null,
+          warehouseId,
+          box_delivery_base: transformNumericValue(warehouse.boxDeliveryBase),
+          box_delivery_liter: transformNumericValue(warehouse.boxDeliveryLiter),
+          box_delivery_coef_expr: transformNumericValue(warehouse.boxDeliveryCoefExpr),
+          box_delivery_marketplace_base: transformNumericValue(warehouse.boxDeliveryMarketplaceBase),
+          box_delivery_marketplace_liter: transformNumericValue(warehouse.boxDeliveryMarketplaceLiter),
+          box_delivery_marketplace_coef_expr: transformNumericValue(warehouse.boxDeliveryMarketplaceCoefExpr),
+          box_storage_base: transformNumericValue(warehouse.boxStorageBase),
+          box_storage_liter: transformNumericValue(warehouse.boxStorageLiter),
+          box_storage_coef_expr: transformNumericValue(warehouse.boxStorageCoefExpr),
+          dt_next_box: validatedData.response.data.dtNextBox || null,
+          dt_till_max: validatedData.response.data.dtTillMax || null,
         };
       });
 
@@ -308,7 +322,7 @@ export class WildberriesApiClient {
         response: {
           ...validatedData.response,
           data: {
-            ...validatedData.response.data,
+            warehouseList: validatedData.response.data.warehouseList,
             boxTariffs: transformedTariffs,
           },
         },

@@ -2,7 +2,6 @@ import { z } from 'zod';
 
 // Схема для валидации данных о складах
 export const warehouseSchema = z.object({
-  id: z.number(),
   warehouseName: z.string(),
   geoName: z.string().optional(),
 });
@@ -25,7 +24,7 @@ const numericValueSchema = z.union([
 
 // Схема для валидации тарифов
 export const boxTariffSchema = z.object({
-  warehouseId: z.number(),
+  warehouseId: z.string(),
   // Тарифы доставки FBO
   box_delivery_base: numericValueSchema.nullable(),
   box_delivery_liter: numericValueSchema.nullable(),
@@ -40,11 +39,7 @@ export const boxTariffSchema = z.object({
   box_storage_coef_expr: numericValueSchema.nullable(),
   // Метаданные
   dt_next_box: z.string().nullable(),
-  dt_till_max: z.string().nullable().transform((val) => {
-    if (!val) return null;
-    const date = new Date(val);
-    return isNaN(date.getTime()) ? null : date;
-  }),
+  dt_till_max: z.string().nullable(),
 });
 
 // Схема для валидации ответа с тарифами

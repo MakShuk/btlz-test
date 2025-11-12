@@ -192,7 +192,7 @@ export class TariffsUpdater {
 
     try {
       // Создаем Map для быстрого поиска складов по ID из API
-      const warehouseIdMap = new Map<number, number>();
+      const warehouseIdMap = new Map<string, number>();
 
       // 1. Обработка складов
       this.logger.info('Начало обработки складов', { count: warehouseList.length });
@@ -200,11 +200,14 @@ export class TariffsUpdater {
       for (const warehouseData of warehouseList) {
         try {
           const warehouse = await this.processWarehouse(warehouseData, trx);
-          warehouseIdMap.set(warehouseData.id, warehouse.id);
+          // Генерируем тот же ID, что и в API клиенте
+          const warehouseApiId = this.generateWarehouseId(warehouseData.warehouseName);
+          warehouseIdMap.set(warehouseApiId, warehouse.id);
           warehousesProcessed++;
 
           this.logger.debug('Склад обработан', {
             warehouse_name: warehouseData.warehouseName,
+            warehouse_api_id: warehouseApiId,
             db_id: warehouse.id
           });
         } catch (error) {
@@ -219,6 +222,7 @@ export class TariffsUpdater {
 
       for (const boxTariff of boxTariffs) {
         try {
+          // Ищем ID склада в базе по ID из API
           const warehouseDbId = warehouseIdMap.get(boxTariff.warehouseId);
 
           if (!warehouseDbId) {
@@ -363,6 +367,17 @@ export class TariffsUpdater {
 
     const date = new Date(dateString);
     return date instanceof Date && !isNaN(date.getTime());
+  }
+
+  /**
+   * Генерация ID склада из имени (та же логика, что и в API клиенте)
+   */
+  private generateWarehouseId(warehouseName: string): string {
+    return warehouseName
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '');
   }
 }
 
