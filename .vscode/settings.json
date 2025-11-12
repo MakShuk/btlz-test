@@ -17,9 +17,13 @@
         "**/.hg": true,
         "**/.DS_Store": true,
         "**/Thumbs.db": true,
-        ".vscode": true
+        ".vscode": true,
+        "node_modules": true,
+        "dist": true
     },
     "hide-files.files": [
-        ".vscode"
+        ".vscode",
+        "node_modules",
+        "dist"
     ]
 }
