@@ -5,3 +5,7 @@ dist
 docs
 .kilocode
 .vscode
+
+# Логи
+logs/
+*.log
