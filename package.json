@@ -9,6 +9,7 @@
         "start:dev": "nodemon --watch src --ext ts --exec tsx src/app.ts",
         "watch:build": "tsc --build --force --verbose --watch",
         "knex:dev": "tsx src/utils/knex.ts",
+        "update-tariffs:dev": "tsx src/utils/update-tariffs.ts",
         "build": "tsc --allowJs",
         "start": "node dist/app.js",
         "knex": "node dist/utils/knex.js",
