@@ -1,5 +1,6 @@
 import knex, { migrate, seed } from "#postgres/knex.js";
 import { tariffsScheduler } from './scheduler/tariffs-scheduler.js';
+import { TariffsUpdater } from './services/tariffs-updater.js';
 import { logger } from './utils/logger.js';
 
 /**
@@ -18,6 +19,33 @@ async function startApp() {
     logger.info('Запуск seed данных');
     await seed.run();
     logger.info('Seed данные успешно загружены');
+
+    // Запуск первоначального обновления тарифов
+    logger.info('Запуск первоначального обновления тарифов');
+    try {
+      const tariffsUpdater = new TariffsUpdater();
+      const initialUpdateResult = await tariffsUpdater.updateAllTariffs();
+
+      if (initialUpdateResult) {
+        if (initialUpdateResult.success) {
+          logger.info('Первоначальное обновление тарифов завершено успешно', {
+            warehousesProcessed: initialUpdateResult.warehousesProcessed,
+            tariffsProcessed: initialUpdateResult.tariffsProcessed,
+            duration: initialUpdateResult.duration
+          });
+        } else {
+          logger.warn('Первоначальное обновление тарифов завершено с ошибками', {
+            errorsCount: initialUpdateResult.errors.length,
+            errors: initialUpdateResult.errors
+          });
+        }
+      } else {
+        logger.error('Первоначальное обновление тарифов вернуло неопределенный результат');
+      }
+    } catch (error) {
+      logger.logError(error as Error, 'Ошибка при первоначальном обновлении тарифов');
+      // Не прерываем запуск приложения, а продолжаем с планировщиком
+    }
 
     // Запуск планировщика тарифов
     logger.info('Запуск планировщика автоматического обновления тарифов');
