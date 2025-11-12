@@ -1,11 +1,5 @@
 import { z } from 'zod';
 
-// Схема для валидации данных о складах
-export const warehouseSchema = z.object({
-  warehouseName: z.string(),
-  geoName: z.string().optional(),
-});
-
 // Схема для валидации числовых значений, которые могут приходить как "-" (NULL)
 const numericValueSchema = z.union([
   z.string().transform((val) => {
@@ -21,6 +15,30 @@ const numericValueSchema = z.union([
   z.number(),
   z.null(),
 ]);
+
+// Схема для валидации данных о складах с тарифами
+export const warehouseWithTariffsSchema = z.object({
+  warehouseName: z.string(),
+  geoName: z.string().optional(),
+  // Тарифы доставки FBO
+  boxDeliveryBase: numericValueSchema.nullable(),
+  boxDeliveryLiter: numericValueSchema.nullable(),
+  boxDeliveryCoefExpr: numericValueSchema.nullable(),
+  // Тарифы доставки FBS
+  boxDeliveryMarketplaceBase: numericValueSchema.nullable(),
+  boxDeliveryMarketplaceLiter: numericValueSchema.nullable(),
+  boxDeliveryMarketplaceCoefExpr: numericValueSchema.nullable(),
+  // Тарифы хранения
+  boxStorageBase: numericValueSchema.nullable(),
+  boxStorageLiter: numericValueSchema.nullable(),
+  boxStorageCoefExpr: numericValueSchema.nullable(),
+});
+
+// Схема для валидации данных о складах (без тарифов)
+export const warehouseSchema = z.object({
+  warehouseName: z.string(),
+  geoName: z.string().optional(),
+});
 
 // Схема для валидации тарифов
 export const boxTariffSchema = z.object({
@@ -46,8 +64,9 @@ export const boxTariffSchema = z.object({
 export const boxTariffResponseSchema = z.object({
   response: z.object({
     data: z.object({
-      warehouseList: z.array(warehouseSchema),
-      boxTariffs: z.array(boxTariffSchema),
+      dtNextBox: z.string().nullable().optional(),
+      dtTillMax: z.string().nullable().optional(),
+      warehouseList: z.array(warehouseWithTariffsSchema),
     }),
     error: z.boolean().optional(),
     errorText: z.string().optional(),
@@ -65,6 +84,7 @@ export const apiErrorSchema = z.object({
 
 // Экспорт TypeScript типов через z.infer
 export type WarehouseData = z.infer<typeof warehouseSchema>;
+export type WarehouseWithTariffsData = z.infer<typeof warehouseWithTariffsSchema>;
 export type BoxTariff = z.infer<typeof boxTariffSchema>;
 export type BoxTariffResponse = z.infer<typeof boxTariffResponseSchema>;
 export type ApiError = z.infer<typeof apiErrorSchema>;

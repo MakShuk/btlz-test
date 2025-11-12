@@ -39,7 +39,7 @@ const getLogLevel = (): string => {
   if (level && Object.values(LogLevel).includes(level as LogLevel)) {
     return level;
   }
-  return process.env.NODE_ENV === 'production' ? LogLevel.INFO : LogLevel.DEBUG;
+  return process.env.NODE_ENV === 'production' ? LogLevel.ERROR : LogLevel.INFO;
 };
 
 // Получение пути к директории с логами
@@ -104,8 +104,8 @@ const createTransports = () => {
     })
   );
 
-  // Включаем файловые логи только если не отключены явно
-  if (process.env.LOGS_TO_FILE !== 'false') {
+  // Включаем файловые логи только если включены явно
+  if (process.env.LOGS_TO_FILE === 'true') {
     // Общий лог файл с ротацией
     transports.push(
       new DailyRotateFile({

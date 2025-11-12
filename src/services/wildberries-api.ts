@@ -129,8 +129,7 @@ export class WildberriesApiClient {
 
       this.logger.info('Тарифы успешно получены', {
         date,
-        warehousesCount: validatedData.response.data.warehouseList.length,
-        tariffsCount: validatedData.response.data.boxTariffs.length
+        warehousesCount: validatedData.response.data.warehouseList.length
       });
 
       endOperation();
@@ -257,76 +256,19 @@ export class WildberriesApiClient {
    */
   private validateTariffResponse(data: unknown): BoxTariffResponse {
     try {
-      // Временно логируем сырые данные для отладки
-      this.logger.debug('Сырой ответ от API', { rawData: JSON.stringify(data, null, 2) });
+      // Логируем сырые данные только если включен специальный флаг для отладки
+      if (process.env.LOG_RAW_API_RESPONSE === 'true') {
+        this.logger.debug('Сырой ответ от API', { rawData: JSON.stringify(data, null, 2) });
+      }
 
-      // Сначала валидируем базовую структуру
-      const baseSchema = z.object({
-        response: z.object({
-          data: z.object({
-            warehouseList: z.array(z.any()),
-            dtNextBox: z.string().optional(),
-            dtTillMax: z.string().optional(),
-          }),
-          error: z.boolean().optional(),
-          errorText: z.string().optional(),
-          additionalErrors: z.array(z.string()).optional(),
-        }),
+      // Валидируем по основной схеме
+      const validatedData = boxTariffResponseSchema.parse(data);
+
+      this.logger.info('Тарифы успешно получены', {
+        warehousesCount: validatedData.response.data.warehouseList.length
       });
 
-      const validatedData = baseSchema.parse(data);
-
-      // Преобразуем данные о складах в тарифы
-      const transformedTariffs = validatedData.response.data.warehouseList.map((warehouse: any) => {
-        // Преобразуем строковые значения в числа, если необходимо
-        const transformNumericValue = (val: any): number | null => {
-          if (val === null || val === undefined || val === '-' || val === '') {
-            return null;
-          }
-          if (typeof val === 'number') {
-            return val;
-          }
-          if (typeof val === 'string') {
-            const normalized = val.replace(',', '.');
-            const parsed = parseFloat(normalized);
-            return isNaN(parsed) ? null : parsed;
-          }
-          return null;
-        };
-
-        // Генерируем warehouseId на основе имени склада
-        const warehouseId = warehouse.warehouseName
-          .toLowerCase()
-          .replace(/[^a-z0-9]/g, '_')
-          .replace(/_+/g, '_')
-          .replace(/^_|_$/g, '');
-
-        return {
-          warehouseId,
-          box_delivery_base: transformNumericValue(warehouse.boxDeliveryBase),
-          box_delivery_liter: transformNumericValue(warehouse.boxDeliveryLiter),
-          box_delivery_coef_expr: transformNumericValue(warehouse.boxDeliveryCoefExpr),
-          box_delivery_marketplace_base: transformNumericValue(warehouse.boxDeliveryMarketplaceBase),
-          box_delivery_marketplace_liter: transformNumericValue(warehouse.boxDeliveryMarketplaceLiter),
-          box_delivery_marketplace_coef_expr: transformNumericValue(warehouse.boxDeliveryMarketplaceCoefExpr),
-          box_storage_base: transformNumericValue(warehouse.boxStorageBase),
-          box_storage_liter: transformNumericValue(warehouse.boxStorageLiter),
-          box_storage_coef_expr: transformNumericValue(warehouse.boxStorageCoefExpr),
-          dt_next_box: validatedData.response.data.dtNextBox || null,
-          dt_till_max: validatedData.response.data.dtTillMax || null,
-        };
-      });
-
-      // Валидируем преобразованные данные по основной схеме
-      return boxTariffResponseSchema.parse({
-        response: {
-          ...validatedData.response,
-          data: {
-            warehouseList: validatedData.response.data.warehouseList,
-            boxTariffs: transformedTariffs,
-          },
-        },
-      });
+      return validatedData;
     } catch (error) {
       if (error instanceof z.ZodError) {
         const errorMessages = error.errors.map(e => `${e.path.join('.')}: ${e.message}`);

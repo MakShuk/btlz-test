@@ -1,7 +1,7 @@
 import { WildberriesApiClient } from './wildberries-api.js';
 import { WarehouseService } from './warehouse-service.js';
 import { TariffService } from './tariff-service.js';
-import { BoxTariffResponse, WarehouseData, BoxTariff } from '../types/wildberries.js';
+import { BoxTariffResponse, WarehouseData, BoxTariff, WarehouseWithTariffsData } from '../types/wildberries.js';
 import knex from '#postgres/knex.js';
 import { getServiceLogger } from '../utils/logger.js';
 
@@ -81,18 +81,18 @@ export class TariffsUpdater {
       }
 
       // 2. Валидация данных (уже произошла в WildberriesApiClient через Zod)
-      const { warehouseList, boxTariffs } = apiResponse.response.data;
+      const { warehouseList, dtTillMax } = apiResponse.response.data;
       this.logger.info('Данные получены из API', {
         date,
         warehousesCount: warehouseList.length,
-        tariffsCount: boxTariffs.length
+        dtTillMax
       });
 
       // 3. Транзакционное сохранение данных
       const processingResult = await this.processAndSaveData(
         warehouseList,
-        boxTariffs,
-        date
+        date,
+        dtTillMax
       );
 
       warehousesProcessed = processingResult.warehousesProcessed;
@@ -175,9 +175,9 @@ export class TariffsUpdater {
    * Обработка и сохранение данных в транзакции
    */
   private async processAndSaveData(
-    warehouseList: WarehouseData[],
-    boxTariffs: BoxTariff[],
-    date: string
+    warehouseList: WarehouseWithTariffsData[],
+    date: string,
+    dtTillMax: string | null = null
   ): Promise<{
     warehousesProcessed: number;
     tariffsProcessed: number;
@@ -191,53 +191,33 @@ export class TariffsUpdater {
     const trx = await knex.transaction();
 
     try {
-      // Создаем Map для быстрого поиска складов по ID из API
-      const warehouseIdMap = new Map<string, number>();
-
-      // 1. Обработка складов
-      this.logger.info('Начало обработки складов', { count: warehouseList.length });
+      // 1. Обработка складов и тарифов
+      this.logger.info('Начало обработки складов с тарифами', { count: warehouseList.length });
 
       for (const warehouseData of warehouseList) {
         try {
-          const warehouse = await this.processWarehouse(warehouseData, trx);
-          // Генерируем тот же ID, что и в API клиенте
-          const warehouseApiId = this.generateWarehouseId(warehouseData.warehouseName);
-          warehouseIdMap.set(warehouseApiId, warehouse.id);
+          // Сначала обрабатываем склад
+          const warehouse = await this.processWarehouse({
+            warehouseName: warehouseData.warehouseName,
+            geoName: warehouseData.geoName
+          }, trx);
           warehousesProcessed++;
 
           this.logger.debug('Склад обработан', {
             warehouse_name: warehouseData.warehouseName,
-            warehouse_api_id: warehouseApiId,
             db_id: warehouse.id
           });
-        } catch (error) {
-          const errorMsg = `Ошибка обработки склада ${warehouseData.warehouseName}: ${(error as Error).message}`;
-          this.logger.error(errorMsg, { warehouse: warehouseData.warehouseName });
-          errors.push(errorMsg);
-        }
-      }
 
-      // 2. Обработка тарифов
-      this.logger.info('Начало обработки тарифов', { count: boxTariffs.length });
-
-      for (const boxTariff of boxTariffs) {
-        try {
-          // Ищем ID склада в базе по ID из API
-          const warehouseDbId = warehouseIdMap.get(boxTariff.warehouseId);
-
-          if (!warehouseDbId) {
-            throw new Error(`Не найден склад с API ID ${boxTariff.warehouseId}`);
-          }
-
-          await this.processTariff(boxTariff, warehouseDbId, date, trx);
+          // Затем обрабатываем тариф для этого склада
+          await this.processTariffFromWarehouseData(warehouseData, warehouse.id, date, dtTillMax, trx);
           tariffsProcessed++;
 
           if (tariffsProcessed % 10 === 0) {
             this.logger.debug('Обработка тарифов в процессе', { processed: tariffsProcessed });
           }
         } catch (error) {
-          const errorMsg = `Ошибка обработки тарифа для склада ${boxTariff.warehouseId}: ${(error as Error).message}`;
-          this.logger.error(errorMsg, { warehouseId: boxTariff.warehouseId });
+          const errorMsg = `Ошибка обработки склада ${warehouseData.warehouseName}: ${(error as Error).message}`;
+          this.logger.error(errorMsg, { warehouse: warehouseData.warehouseName });
           errors.push(errorMsg);
         }
       }
@@ -341,6 +321,62 @@ export class TariffsUpdater {
       boxTariff.box_storage_coef_expr,
       boxTariff.dt_next_box,
       boxTariff.dt_till_max,
+    ]);
+
+    const rows = result.rows || result;
+    return Array.isArray(rows) ? rows[0] : rows;
+  }
+
+  /**
+   * Обработка одного тарифа из данных склада (upsert)
+   */
+  private async processTariffFromWarehouseData(
+    warehouseData: WarehouseWithTariffsData,
+    warehouseDbId: number,
+    date: string,
+    dtTillMax: string | null,
+    trx: any
+  ) {
+    // Трансформация данных: преобразование "-" в NULL уже произошло в Zod схеме
+    const result = await trx.raw(`
+      INSERT INTO box_tariffs (
+        warehouse_id, tariff_date,
+        box_delivery_base, box_delivery_liter, box_delivery_coef_expr,
+        box_delivery_marketplace_base, box_delivery_marketplace_liter, box_delivery_marketplace_coef_expr,
+        box_storage_base, box_storage_liter, box_storage_coef_expr,
+        dt_next_box, dt_till_max,
+        created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ON CONFLICT (warehouse_id, tariff_date)
+      DO UPDATE SET
+        box_delivery_base = EXCLUDED.box_delivery_base,
+        box_delivery_liter = EXCLUDED.box_delivery_liter,
+        box_delivery_coef_expr = EXCLUDED.box_delivery_coef_expr,
+        box_delivery_marketplace_base = EXCLUDED.box_delivery_marketplace_base,
+        box_delivery_marketplace_liter = EXCLUDED.box_delivery_marketplace_liter,
+        box_delivery_marketplace_coef_expr = EXCLUDED.box_delivery_marketplace_coef_expr,
+        box_storage_base = EXCLUDED.box_storage_base,
+        box_storage_liter = EXCLUDED.box_storage_liter,
+        box_storage_coef_expr = EXCLUDED.box_storage_coef_expr,
+        dt_next_box = EXCLUDED.dt_next_box,
+        dt_till_max = EXCLUDED.dt_till_max,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING *
+    `, [
+      warehouseDbId,
+      date,
+      warehouseData.boxDeliveryBase,
+      warehouseData.boxDeliveryLiter,
+      warehouseData.boxDeliveryCoefExpr,
+      warehouseData.boxDeliveryMarketplaceBase,
+      warehouseData.boxDeliveryMarketplaceLiter,
+      warehouseData.boxDeliveryMarketplaceCoefExpr,
+      warehouseData.boxStorageBase,
+      warehouseData.boxStorageLiter,
+      warehouseData.boxStorageCoefExpr,
+      null, // dt_next_box
+      dtTillMax, // dt_till_max
     ]);
 
     const rows = result.rows || result;
