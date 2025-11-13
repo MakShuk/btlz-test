@@ -1,6 +1,7 @@
 import knex, { migrate, seed } from "#postgres/knex.js";
 import { tariffsScheduler } from './scheduler/tariffs-scheduler.js';
 import { TariffsUpdater } from './services/tariffs-updater.js';
+import { spreadsheetInitializer } from './services/spreadsheet-initializer.js';
 import { logger } from './utils/logger.js';
 
 /**
@@ -19,6 +20,16 @@ async function startApp() {
     logger.info('Запуск seed данных');
     await seed.run();
     logger.info('Seed данные успешно загружены');
+
+    // Инициализация таблиц из переменных окружения
+    logger.info('Инициализация таблиц из переменных окружения GOOGLE_SHEET_IDS');
+    try {
+      await spreadsheetInitializer.initializeSpreadsheets();
+      logger.info('Инициализация таблиц завершена');
+    } catch (error) {
+      logger.logError(error as Error, 'Ошибка при инициализации таблиц');
+      // Не прерываем запуск приложения, а продолжаем работу
+    }
 
     // Запуск первоначального обновления тарифов
     logger.info('Запуск первоначального обновления тарифов');
