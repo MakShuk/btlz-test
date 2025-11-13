@@ -12,6 +12,8 @@ export class TariffFormatter {
    */
   static getHeaders(): string[] {
     return [
+      "warehouseName",
+      "updated_at",
       "boxDeliveryBase",
       "boxDeliveryCoefExpr",
       "boxDeliveryLiter",
@@ -21,9 +23,7 @@ export class TariffFormatter {
       "boxStorageBase",
       "boxStorageCoefExpr",
       "boxStorageLiter",
-      "geoName",
-      "warehouseName",
-      "updated_at"
+      "geoName"
     ];
   }
 
@@ -97,6 +97,8 @@ export class TariffFormatter {
     };
 
     return [
+      formattedTariff.warehouseName,
+      formattedTariff.updated_at || '',
       formatNumber(formattedTariff.boxDeliveryBase),
       formatNumber(formattedTariff.boxDeliveryCoefExpr),
       formatNumber(formattedTariff.boxDeliveryLiter),
@@ -106,9 +108,7 @@ export class TariffFormatter {
       formatNumber(formattedTariff.boxStorageBase),
       formatNumber(formattedTariff.boxStorageCoefExpr),
       formatNumber(formattedTariff.boxStorageLiter),
-      formattedTariff.geoName || '',
-      formattedTariff.warehouseName,
-      formattedTariff.updated_at || ''
+      formattedTariff.geoName || ''
     ];
   }
 
