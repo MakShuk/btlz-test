@@ -90,6 +90,18 @@ export class SheetsWriter {
         return `${defaultSheetName}!${range}`;
     }
 
+    /** Извлечение имени листа из диапазона */
+    private extractSheetNameFromRange(range: string): string {
+        // Если диапазон содержит имя листа (символ '!'), извлекаем его
+        if (range.includes("!")) {
+            const parts = range.split("!");
+            return parts[0];
+        }
+
+        // Иначе возвращаем имя листа по умолчанию
+        return this.config.getDefaultSheetName();
+    }
+
     /** Выполнение операции с механизмом повторных попыток */
     private async executeWithRetry<T>(
         operation: () => Promise<T>,
@@ -168,6 +180,148 @@ export class SheetsWriter {
 
         return false;
     }
+    /**
+     * Проверка существования листа в таблице
+     *
+     * @param spreadsheetId ID таблицы
+     * @param sheetName Имя листа
+     * @returns Promise<boolean> - true если лист существует, иначе false
+     */
+    public async checkSheetExists(spreadsheetId: string, sheetName: string): Promise<boolean> {
+        try {
+            const sheetsService = await this.getSheetsService();
+
+            const response = await this.executeWithRetry(
+                async () => {
+                    const result = await sheetsService.spreadsheets.get({
+                        spreadsheetId,
+                        includeGridData: false
+                    });
+                    return result;
+                },
+                "checkSheetExists",
+                spreadsheetId
+            );
+
+            // Проверяем, есть ли лист с указанным именем в таблице
+            return !!(response.data.sheets && response.data.sheets.some(sheet => sheet.properties?.title === sheetName));
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+
+            // Если таблица не найдена или нет доступа, возвращаем false
+            if (errorMessage.includes('Not Found') || errorMessage.includes('permission') || errorMessage.includes('Forbidden')) {
+                logger.warn("Нет доступа к таблице или таблица не найдена", {
+                    spreadsheetId,
+                    sheetName,
+                    error: errorMessage
+                });
+                return false;
+            }
+
+            logger.error("Ошибка при проверке существования листа", {
+                spreadsheetId,
+                sheetName,
+                error: errorMessage
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Создание нового листа в таблице
+     *
+     * @param spreadsheetId ID таблицы
+     * @param sheetName Имя нового листа
+     * @returns Promise<boolean> - true если лист создан успешно, иначе false
+     */
+    public async createSheet(spreadsheetId: string, sheetName: string): Promise<boolean> {
+        try {
+            const sheetsService = await this.getSheetsService();
+
+            const response = await this.executeWithRetry(
+                async () => {
+                    const result = await sheetsService.spreadsheets.batchUpdate({
+                        spreadsheetId,
+                        requestBody: {
+                            requests: [
+                                {
+                                    addSheet: {
+                                        properties: {
+                                            title: sheetName
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    });
+                    return result;
+                },
+                "createSheet",
+                spreadsheetId
+            );
+
+            const success = !!(response.data.replies && response.data.replies.length > 0 && response.data.replies[0].addSheet !== undefined);
+
+            if (success) {
+                logger.info("Лист успешно создан", {
+                    spreadsheetId,
+                    sheetName
+                });
+            }
+
+            return success;
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            logger.error("Ошибка при создании листа", {
+                spreadsheetId,
+                sheetName,
+                error: errorMessage
+            });
+            return false;
+        }
+    }
+
+    /**
+     * Проверка и создание листа при необходимости
+     *
+     * @param spreadsheetId ID таблицы
+     * @param sheetName Имя листа
+     * @returns Promise<boolean> - true если лист существует или был создан, иначе false
+     */
+    public async ensureSheetExists(spreadsheetId: string, sheetName: string): Promise<boolean> {
+        // Проверяем, существует ли лист
+        const sheetExists = await this.checkSheetExists(spreadsheetId, sheetName);
+
+        if (sheetExists) {
+            logger.debug("Лист уже существует", {
+                spreadsheetId,
+                sheetName
+            });
+            return true;
+        }
+
+        // Если лист не существует, пытаемся создать его
+        logger.info("Лист не существует, создаем новый", {
+            spreadsheetId,
+            sheetName
+        });
+
+        const created = await this.createSheet(spreadsheetId, sheetName);
+
+        if (created) {
+            logger.info("Лист успешно создан", {
+                spreadsheetId,
+                sheetName
+            });
+        } else {
+            logger.error("Не удалось создать лист", {
+                spreadsheetId,
+                sheetName
+            });
+        }
+
+        return created;
+    }
 
     /** Функция задержки */
     private sleep(ms: number): Promise<void> {
@@ -191,6 +345,31 @@ export class SheetsWriter {
         });
 
         try {
+            // Извлекаем имя листа из диапазона
+            const sheetName = this.extractSheetNameFromRange(fullRange);
+
+            // Проверяем и создаем лист при необходимости
+            const sheetExists = await this.ensureSheetExists(spreadsheetId, sheetName);
+            if (!sheetExists) {
+                const duration = Date.now() - startTime;
+                const errorMessage = `Не удалось создать лист "${sheetName}"`;
+
+                logger.error("Ошибка при очистке диапазона", {
+                    spreadsheetId,
+                    range: fullRange,
+                    error: errorMessage,
+                    duration,
+                });
+
+                return {
+                    success: false,
+                    spreadsheetId,
+                    range: fullRange,
+                    error: errorMessage,
+                    duration,
+                };
+            }
+
             const sheetsService = await this.getSheetsService();
 
             const result = await this.executeWithRetry(
@@ -262,6 +441,33 @@ export class SheetsWriter {
         });
 
         try {
+            // Извлекаем имя листа из диапазона
+            const sheetName = this.extractSheetNameFromRange(fullRange);
+
+            // Проверяем и создаем лист при необходимости
+            const sheetExists = await this.ensureSheetExists(spreadsheetId, sheetName);
+            if (!sheetExists) {
+                const duration = Date.now() - startTime;
+                const errorMessage = `Не удалось создать лист "${sheetName}"`;
+
+                logger.error("Ошибка при пакетном обновлении", {
+                    spreadsheetId,
+                    range: fullRange,
+                    rowsCount,
+                    error: errorMessage,
+                    duration,
+                });
+
+                return {
+                    success: false,
+                    spreadsheetId,
+                    range: fullRange,
+                    rowsCount,
+                    error: errorMessage,
+                    duration,
+                };
+            }
+
             const sheetsService = await this.getSheetsService();
 
             const result = await this.executeWithRetry(
@@ -343,6 +549,33 @@ export class SheetsWriter {
         });
 
         try {
+            // Извлекаем имя листа из диапазона
+            const sheetName = this.extractSheetNameFromRange(fullRange);
+
+            // Проверяем и создаем лист при необходимости
+            const sheetExists = await this.ensureSheetExists(spreadsheetId, sheetName);
+            if (!sheetExists) {
+                const duration = Date.now() - startTime;
+                const errorMessage = `Не удалось создать лист "${sheetName}"`;
+
+                logger.error("Ошибка при добавлении строк", {
+                    spreadsheetId,
+                    range: fullRange,
+                    rowsCount,
+                    error: errorMessage,
+                    duration,
+                });
+
+                return {
+                    success: false,
+                    spreadsheetId,
+                    range: fullRange,
+                    rowsCount,
+                    error: errorMessage,
+                    duration,
+                };
+            }
+
             const sheetsService = await this.getSheetsService();
 
             const result = await this.executeWithRetry(
