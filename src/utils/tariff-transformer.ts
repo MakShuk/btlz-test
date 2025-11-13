@@ -115,25 +115,37 @@ export class TariffTransformer {
    * Преобразование данных тарифа в формат для Google Sheets
    * @param tariff - данные тарифа из базы данных
    * @param warehouseName - название склада
+   * @param geoName - название геолокации (опционально)
    * @returns объект с полями для Google Sheets
    */
   static toSheetsFormat(tariff: {
     tariff_date: Date | string;
     box_delivery_base: number | null;
+    box_delivery_liter: number | null;
+    box_delivery_coef_expr: number | null;
     box_delivery_marketplace_base: number | null;
+    box_delivery_marketplace_liter: number | null;
+    box_delivery_marketplace_coef_expr: number | null;
     box_storage_base: number | null;
+    box_storage_liter: number | null;
+    box_storage_coef_expr: number | null;
     sorting_coefficient: number | null;
     dt_next_box: string | null;
     dt_till_max: Date | string | null;
-  }, warehouseName: string): {
-    warehouse_name: string;
-    tariff_date: string;
-    delivery_fbo: number | null;
-    delivery_fbs: number | null;
-    storage: number | null;
-    sorting_coefficient: number | null;
-    dt_next_box: string | null;
-    dt_till_max: string | null;
+    updated_at: Date | string | null;
+  }, warehouseName: string, geoName?: string | null): {
+    boxDeliveryBase: number | null;
+    boxDeliveryCoefExpr: number | null;
+    boxDeliveryLiter: number | null;
+    boxDeliveryMarketplaceBase: number | null;
+    boxDeliveryMarketplaceCoefExpr: number | null;
+    boxDeliveryMarketplaceLiter: number | null;
+    boxStorageBase: number | null;
+    boxStorageCoefExpr: number | null;
+    boxStorageLiter: number | null;
+    geoName: string | null;
+    warehouseName: string;
+    updated_at: string | null;
   } {
     // Форматирование даты в строку YYYY-MM-DD
     const formatDate = (date: Date | string | null): string | null => {
@@ -148,14 +160,18 @@ export class TariffTransformer {
     };
 
     return {
-      warehouse_name: warehouseName,
-      tariff_date: formatDate(tariff.tariff_date) || '',
-      delivery_fbo: tariff.box_delivery_base,
-      delivery_fbs: tariff.box_delivery_marketplace_base,
-      storage: tariff.box_storage_base,
-      sorting_coefficient: tariff.sorting_coefficient,
-      dt_next_box: tariff.dt_next_box,
-      dt_till_max: formatDate(tariff.dt_till_max),
+      boxDeliveryBase: tariff.box_delivery_base,
+      boxDeliveryCoefExpr: tariff.box_delivery_coef_expr,
+      boxDeliveryLiter: tariff.box_delivery_liter,
+      boxDeliveryMarketplaceBase: tariff.box_delivery_marketplace_base,
+      boxDeliveryMarketplaceCoefExpr: tariff.box_delivery_marketplace_coef_expr,
+      boxDeliveryMarketplaceLiter: tariff.box_delivery_marketplace_liter,
+      boxStorageBase: tariff.box_storage_base,
+      boxStorageCoefExpr: tariff.box_storage_coef_expr,
+      boxStorageLiter: tariff.box_storage_liter,
+      geoName: geoName || null,
+      warehouseName: warehouseName,
+      updated_at: formatDate(tariff.updated_at),
     };
   }
 }

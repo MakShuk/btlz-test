@@ -12,14 +12,18 @@ export class TariffFormatter {
    */
   static getHeaders(): string[] {
     return [
-      "Склад",
-      "Дата тарифа",
-      "Доставка FBO (₽)",
-      "Доставка FBS (₽)",
-      "Хранение (₽)",
-      "Коэффициент",
-      "След. бокс",
-      "Макс. дата"
+      "boxDeliveryBase",
+      "boxDeliveryCoefExpr",
+      "boxDeliveryLiter",
+      "boxDeliveryMarketplaceBase",
+      "boxDeliveryMarketplaceCoefExpr",
+      "boxDeliveryMarketplaceLiter",
+      "boxStorageBase",
+      "boxStorageCoefExpr",
+      "boxStorageLiter",
+      "geoName",
+      "warehouseName",
+      "updated_at"
     ];
   }
 
@@ -31,23 +35,31 @@ export class TariffFormatter {
    */
   static formatTariffsForSheet(tariffs: Tariff[], warehouses: Warehouse[]): any[][] {
     // Создаем карту складов для быстрого доступа по ID
-    const warehouseMap = new Map<number, string>();
+    const warehouseMap = new Map<number, { name: string; geoName: string | null }>();
     warehouses.forEach(warehouse => {
-      warehouseMap.set(warehouse.id, warehouse.warehouse_name);
+      warehouseMap.set(warehouse.id, {
+        name: warehouse.warehouse_name,
+        geoName: warehouse.geo_name
+      });
     });
 
     // Преобразуем каждый тариф в формат для Google Sheets
     const formattedTariffs = tariffs.map(tariff => {
-      const warehouseName = warehouseMap.get(tariff.warehouse_id) || 'Неизвестный склад';
-      return TariffTransformer.toSheetsFormat(tariff, warehouseName);
+      const warehouse = warehouseMap.get(tariff.warehouse_id) || {
+        name: 'Неизвестный склад',
+        geoName: null
+      };
+      return TariffTransformer.toSheetsFormat(tariff, warehouse.name, warehouse.geoName);
     });
 
     // Сортируем по коэффициенту сортировки (null значения в конце)
     formattedTariffs.sort((a, b) => {
-      if (a.sorting_coefficient === null && b.sorting_coefficient === null) return 0;
-      if (a.sorting_coefficient === null) return 1;
-      if (b.sorting_coefficient === null) return -1;
-      return a.sorting_coefficient - b.sorting_coefficient;
+      // Поскольку sorting_coefficient больше нет в возвращаемом формате,
+      // используем boxStorageBase для сортировки как альтернативу
+      if (a.boxStorageBase === null && b.boxStorageBase === null) return 0;
+      if (a.boxStorageBase === null) return 1;
+      if (b.boxStorageBase === null) return -1;
+      return a.boxStorageBase - b.boxStorageBase;
     });
 
     // Преобразуем каждый отформатированный тариф в массив значений для строки таблицы
@@ -65,14 +77,18 @@ export class TariffFormatter {
    * @returns any[] - массив значений в порядке заголовков
    */
   private static toTableRow(formattedTariff: {
-    warehouse_name: string;
-    tariff_date: string;
-    delivery_fbo: number | null;
-    delivery_fbs: number | null;
-    storage: number | null;
-    sorting_coefficient: number | null;
-    dt_next_box: string | null;
-    dt_till_max: string | null;
+    boxDeliveryBase: number | null;
+    boxDeliveryCoefExpr: number | null;
+    boxDeliveryLiter: number | null;
+    boxDeliveryMarketplaceBase: number | null;
+    boxDeliveryMarketplaceCoefExpr: number | null;
+    boxDeliveryMarketplaceLiter: number | null;
+    boxStorageBase: number | null;
+    boxStorageCoefExpr: number | null;
+    boxStorageLiter: number | null;
+    geoName: string | null;
+    warehouseName: string;
+    updated_at: string | null;
   }): any[] {
     // Функция для форматирования чисел с 2 знаками после запятой
     const formatNumber = (num: number | null): string | number => {
@@ -81,14 +97,18 @@ export class TariffFormatter {
     };
 
     return [
-      formattedTariff.warehouse_name,
-      formattedTariff.tariff_date,
-      formatNumber(formattedTariff.delivery_fbo),
-      formatNumber(formattedTariff.delivery_fbs),
-      formatNumber(formattedTariff.storage),
-      formatNumber(formattedTariff.sorting_coefficient),
-      formattedTariff.dt_next_box || '',
-      formattedTariff.dt_till_max || ''
+      formatNumber(formattedTariff.boxDeliveryBase),
+      formatNumber(formattedTariff.boxDeliveryCoefExpr),
+      formatNumber(formattedTariff.boxDeliveryLiter),
+      formatNumber(formattedTariff.boxDeliveryMarketplaceBase),
+      formatNumber(formattedTariff.boxDeliveryMarketplaceCoefExpr),
+      formatNumber(formattedTariff.boxDeliveryMarketplaceLiter),
+      formatNumber(formattedTariff.boxStorageBase),
+      formatNumber(formattedTariff.boxStorageCoefExpr),
+      formatNumber(formattedTariff.boxStorageLiter),
+      formattedTariff.geoName || '',
+      formattedTariff.warehouseName,
+      formattedTariff.updated_at || ''
     ];
   }
 
