@@ -19,11 +19,13 @@
         "**/Thumbs.db": true,
         ".vscode": true,
         "node_modules": true,
-        "dist": true
+        "dist": true,
+        ".kilocode/rules": true
     },
     "hide-files.files": [
         ".vscode",
         "node_modules",
-        "dist"
+        "dist",
+        ".kilocode/rules"
     ]
 }

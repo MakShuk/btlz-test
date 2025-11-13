@@ -21,6 +21,9 @@ export enum LogCategory {
   SERVICE = 'service',
   SCHEDULER = 'scheduler',
   GENERAL = 'general',
+  GOOGLE_SHEETS = 'google_sheets',
+  METRICS = 'metrics',
+  ALERTS = 'alerts',
 }
 
 // Интерфейс для структурированных логов
@@ -30,7 +33,279 @@ export interface LogMetadata {
   method?: string;
   duration?: number;
   error?: Error | string;
+  correlationId?: string;
+  operationType?: string;
+  rowsCount?: number;
+  spreadsheetId?: string;
+  sheetName?: string;
+  retryCount?: number;
   [key: string]: any;
+}
+
+// Интерфейс для метрик операций
+export interface OperationMetrics {
+  operationType: string;
+  startTime: number;
+  endTime?: number;
+  duration?: number;
+  success: boolean;
+  errorCount: number;
+  rowsProcessed?: number;
+  spreadsheetId?: string;
+  sheetName?: string;
+  retryCount?: number;
+}
+
+// Интерфейс для алертов
+export interface AlertConfig {
+  operationType: string;
+  errorThreshold: number;
+  durationThreshold: number;
+  timeWindow: number; // в миллисекундах
+}
+
+// Интерфейс для счётчика ошибок
+export interface ErrorCounter {
+  [operationType: string]: {
+    count: number;
+    lastError: Date;
+    errors: Array<{
+      timestamp: Date;
+      error: string;
+      correlationId?: string;
+    }>;
+  };
+}
+
+/**
+ * Класс для управления метриками операций
+ */
+class MetricsManager {
+  private metrics: Map<string, OperationMetrics> = new Map();
+
+  startOperation(operationType: string, correlationId?: string, metadata?: LogMetadata): string {
+    const id = correlationId || this.generateCorrelationId();
+    const startTime = Date.now();
+
+    const metric: OperationMetrics = {
+      operationType,
+      startTime,
+      success: false,
+      errorCount: 0,
+      ...metadata,
+    };
+
+    this.metrics.set(id, metric);
+
+    return id;
+  }
+
+  endOperation(correlationId: string, success: boolean, errorCount: number = 0): OperationMetrics | null {
+    const metric = this.metrics.get(correlationId);
+    if (!metric) return null;
+
+    metric.endTime = Date.now();
+    metric.duration = metric.endTime - metric.startTime;
+    metric.success = success;
+    metric.errorCount = errorCount;
+
+    this.metrics.delete(correlationId);
+    return metric;
+  }
+
+  getActiveOperations(): Map<string, OperationMetrics> {
+    return new Map(this.metrics);
+  }
+
+  private generateCorrelationId(): string {
+    return `corr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+}
+
+/**
+ * Класс для управления счётчиками ошибок
+ */
+class ErrorCounterManager {
+  private counters: ErrorCounter = {};
+  private cleanupInterval: NodeJS.Timeout;
+
+  constructor() {
+    // Очистка старых ошибок каждые 5 минут
+    this.cleanupInterval = setInterval(() => {
+      this.cleanup();
+    }, 5 * 60 * 1000);
+  }
+
+  incrementError(operationType: string, error: string, correlationId?: string): void {
+    if (!this.counters[operationType]) {
+      this.counters[operationType] = {
+        count: 0,
+        lastError: new Date(),
+        errors: [],
+      };
+    }
+
+    this.counters[operationType].count++;
+    this.counters[operationType].lastError = new Date();
+    this.counters[operationType].errors.push({
+      timestamp: new Date(),
+      error,
+      correlationId,
+    });
+
+    // Храним только последние 50 ошибок для каждого типа
+    if (this.counters[operationType].errors.length > 50) {
+      this.counters[operationType].errors.shift();
+    }
+  }
+
+  getErrorCount(operationType: string, timeWindow?: number): number {
+    if (!this.counters[operationType]) return 0;
+
+    if (!timeWindow) return this.counters[operationType].count;
+
+    const cutoffTime = new Date(Date.now() - timeWindow);
+    return this.counters[operationType].errors.filter(
+      error => error.timestamp >= cutoffTime
+    ).length;
+  }
+
+  getLastError(operationType: string): Date | null {
+    return this.counters[operationType]?.lastError || null;
+  }
+
+  getRecentErrors(operationType: string, limit: number = 10): Array<{
+    timestamp: Date;
+    error: string;
+    correlationId?: string;
+  }> {
+    if (!this.counters[operationType]) return [];
+
+    return this.counters[operationType].errors
+      .slice(-limit)
+      .reverse();
+  }
+
+  private cleanup(): void {
+    const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 часа
+
+    Object.keys(this.counters).forEach(operationType => {
+      this.counters[operationType].errors = this.counters[operationType].errors.filter(
+        error => error.timestamp >= cutoffTime
+      );
+
+      if (this.counters[operationType].errors.length === 0) {
+        delete this.counters[operationType];
+      }
+    });
+  }
+
+  destroy(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+    }
+  }
+}
+
+/**
+ * Класс для управления алертами
+ */
+class AlertManager {
+  private alerts: Map<string, AlertConfig> = new Map();
+  private alertCallbacks: Array<(alert: AlertData) => void> = [];
+
+  constructor() {
+    this.setupDefaultAlerts();
+  }
+
+  private setupDefaultAlerts(): void {
+    // Алерт для Google Sheets операций
+    this.addAlertConfig('google_sheets_sync', {
+      operationType: 'google_sheets_sync',
+      errorThreshold: 3,
+      durationThreshold: 30000, // 30 секунд
+      timeWindow: 5 * 60 * 1000, // 5 минут
+    });
+
+    // Алерт для API операций
+    this.addAlertConfig('api_request', {
+      operationType: 'api_request',
+      errorThreshold: 5,
+      durationThreshold: 10000, // 10 секунд
+      timeWindow: 5 * 60 * 1000, // 5 минут
+    });
+
+    // Алерт для операций с базой данных
+    this.addAlertConfig('database_operation', {
+      operationType: 'database_operation',
+      errorThreshold: 2,
+      durationThreshold: 5000, // 5 секунд
+      timeWindow: 5 * 60 * 1000, // 5 минут
+    });
+  }
+
+  addAlertConfig(name: string, config: AlertConfig): void {
+    this.alerts.set(name, config);
+  }
+
+  checkAlerts(
+    operationType: string,
+    metric: OperationMetrics,
+    errorCounter: ErrorCounterManager
+  ): void {
+    const alertConfigs = Array.from(this.alerts.values()).filter(
+      config => config.operationType === operationType
+    );
+
+    for (const config of alertConfigs) {
+      const errorCount = errorCounter.getErrorCount(
+        operationType,
+        config.timeWindow
+      );
+
+      const shouldAlertError = errorCount >= config.errorThreshold;
+      const shouldAlertDuration = metric.duration && metric.duration >= config.durationThreshold;
+
+      if (shouldAlertError || shouldAlertDuration) {
+        const alertData: AlertData = {
+          type: shouldAlertError ? 'error_threshold' : 'duration_threshold',
+          operationType,
+          threshold: shouldAlertError ? config.errorThreshold : config.durationThreshold,
+          currentValue: shouldAlertError ? errorCount : (metric.duration || 0),
+          timeWindow: config.timeWindow,
+          timestamp: new Date(),
+          correlationId: metric.startTime.toString(),
+        };
+
+        this.triggerAlert(alertData);
+      }
+    }
+  }
+
+  addAlertCallback(callback: (alert: AlertData) => void): void {
+    this.alertCallbacks.push(callback);
+  }
+
+  private triggerAlert(alert: AlertData): void {
+    this.alertCallbacks.forEach(callback => {
+      try {
+        callback(alert);
+      } catch (error) {
+        console.error('Error in alert callback:', error);
+      }
+    });
+  }
+}
+
+// Интерфейс для данных алерта
+export interface AlertData {
+  type: 'error_threshold' | 'duration_threshold';
+  operationType: string;
+  threshold: number;
+  currentValue: number;
+  timeWindow: number;
+  timestamp: Date;
+  correlationId: string;
 }
 
 // Получение уровня логирования из переменных окружения
@@ -158,10 +433,44 @@ const baseLogger = winston.createLogger({
 export class Logger {
   private category: LogCategory;
   private component?: string;
+  private static metricsManager = new MetricsManager();
+  private static errorCounter = new ErrorCounterManager();
+  private static alertManager = new AlertManager();
 
   constructor(category: LogCategory = LogCategory.GENERAL, component?: string) {
     this.category = category;
     this.component = component;
+
+    // Настройка алертов по умолчанию
+    if (!Logger.alertManager) {
+      Logger.setupDefaultAlerts();
+    }
+  }
+
+  private static setupDefaultAlerts(): void {
+    Logger.alertManager.addAlertCallback((alert: AlertData) => {
+      const alertLogger = new Logger(LogCategory.ALERTS, 'AlertManager');
+
+      if (alert.type === 'error_threshold') {
+        alertLogger.error(`Превышен порог ошибок для операции ${alert.operationType}`, {
+          operationType: alert.operationType,
+          threshold: alert.threshold,
+          currentValue: alert.currentValue,
+          timeWindow: alert.timeWindow,
+          correlationId: alert.correlationId,
+          alertType: alert.type,
+        });
+      } else if (alert.type === 'duration_threshold') {
+        alertLogger.warn(`Превышен порог длительности для операции ${alert.operationType}`, {
+          operationType: alert.operationType,
+          threshold: alert.threshold,
+          currentValue: alert.currentValue,
+          timeWindow: alert.timeWindow,
+          correlationId: alert.correlationId,
+          alertType: alert.type,
+        });
+      }
+    });
   }
 
   /**
@@ -270,10 +579,175 @@ export class Logger {
    * Логирование ошибки с полным стеком
    */
   logError(error: Error, context?: string, meta?: LogMetadata): void {
+    // Увеличиваем счётчик ошибок
+    const operationType = meta?.operationType || 'unknown';
+    Logger.errorCounter.incrementError(
+      operationType,
+      error.message,
+      meta?.correlationId
+    );
+
     this.error(context ? `${context}: ${error.message}` : error.message, {
       error: error.stack || error.message,
       ...meta,
     });
+  }
+
+  /**
+   * Начало операции с таймером и correlation ID
+   */
+  startTimedOperation(operationType: string, meta?: LogMetadata): string {
+    const correlationId = Logger.metricsManager.startOperation(operationType, undefined, meta);
+
+    this.debug(`Начало операции: ${operationType}`, {
+      correlationId,
+      operationType,
+      ...meta,
+    });
+
+    return correlationId;
+  }
+
+  /**
+   * Завершение операции с таймером
+   */
+  endTimedOperation(
+    correlationId: string,
+    success: boolean = true,
+    errorCount: number = 0,
+    meta?: LogMetadata
+  ): OperationMetrics | null {
+    const metric = Logger.metricsManager.endOperation(correlationId, success, errorCount);
+
+    if (!metric) {
+      this.warn(`Операция с correlationId ${correlationId} не найдена`, meta);
+      return null;
+    }
+
+    const logMeta: LogMetadata = {
+      correlationId,
+      operationType: metric.operationType,
+      duration: metric.duration,
+      success,
+      errorCount,
+      ...meta,
+    };
+
+    if (success) {
+      this.info(`Операция завершена успешно: ${metric.operationType}`, logMeta);
+    } else {
+      this.warn(`Операция завершена с ошибками: ${metric.operationType}`, logMeta);
+    }
+
+    // Проверяем алерты
+    Logger.alertManager.checkAlerts(metric.operationType, metric, Logger.errorCounter);
+
+    return metric;
+  }
+
+  /**
+   * Логирование операции с Google Sheets
+   */
+  logSheetsOperation(
+    operation: string,
+    spreadsheetId: string,
+    sheetName?: string,
+    meta?: LogMetadata
+  ): void {
+    this.info(`Google Sheets операция: ${operation}`, {
+      operationType: 'google_sheets_operation',
+      spreadsheetId,
+      sheetName,
+      ...meta,
+    });
+  }
+
+  /**
+   * Логирование результатов синхронизации
+   */
+  logSyncResults(
+    spreadsheetId: string,
+    sheetName: string,
+    rowsWritten: number,
+    success: boolean,
+    duration: number,
+    meta?: LogMetadata
+  ): void {
+    const logMeta: LogMetadata = {
+      operationType: 'google_sheets_sync',
+      spreadsheetId,
+      sheetName,
+      rowsCount: rowsWritten,
+      duration,
+      success,
+      ...meta,
+    };
+
+    if (success) {
+      this.info(`Синхронизация успешна: ${sheetName}`, logMeta);
+    } else {
+      this.error(`Синхронизация не удалась: ${sheetName}`, logMeta);
+    }
+  }
+
+  /**
+   * Получение статистики ошибок
+   */
+  getErrorStats(operationType?: string): {
+    totalErrors: number;
+    recentErrors: number;
+    lastError?: Date;
+    operationType?: string;
+    activeOperations?: number;
+  } {
+    if (operationType) {
+      return {
+        totalErrors: Logger.errorCounter.getErrorCount(operationType),
+        recentErrors: Logger.errorCounter.getErrorCount(operationType, 5 * 60 * 1000), // 5 минут
+        lastError: Logger.errorCounter.getLastError(operationType) || undefined,
+        operationType,
+      };
+    }
+
+    // Общая статистика по всем операциям
+    const activeOperations = Logger.metricsManager.getActiveOperations();
+    let totalErrors = 0;
+    let recentErrors = 0;
+
+    // Получаем все типы операций из счётчиков
+    Object.keys((Logger.errorCounter as any).counters).forEach(type => {
+      totalErrors += Logger.errorCounter.getErrorCount(type);
+      recentErrors += Logger.errorCounter.getErrorCount(type, 5 * 60 * 1000);
+    });
+
+    return {
+      totalErrors,
+      recentErrors,
+      activeOperations: activeOperations.size,
+    };
+  }
+
+  /**
+   * Получение метрик операций
+   */
+  getOperationMetrics(): {
+    activeOperations: number;
+    totalOperations: number;
+    averageDuration?: number;
+  } {
+    const activeOperations = Logger.metricsManager.getActiveOperations();
+
+    return {
+      activeOperations: activeOperations.size,
+      totalOperations: 0, // Можно добавить хранение завершённых операций
+    };
+  }
+
+  /**
+   * Очистка ресурсов
+   */
+  static cleanup(): void {
+    Logger.errorCounter.destroy();
   }
 }
 
@@ -310,6 +784,27 @@ export function getServiceLogger(component?: string): Logger {
  */
 export function getSchedulerLogger(component?: string): Logger {
   return new Logger(LogCategory.SCHEDULER, component);
+}
+
+/**
+ * Получение логгера для Google Sheets операций
+ */
+export function getGoogleSheetsLogger(component?: string): Logger {
+  return new Logger(LogCategory.GOOGLE_SHEETS, component);
+}
+
+/**
+ * Получение логгера для метрик
+ */
+export function getMetricsLogger(component?: string): Logger {
+  return new Logger(LogCategory.METRICS, component);
+}
+
+/**
+ * Получение логгера для алертов
+ */
+export function getAlertsLogger(component?: string): Logger {
+  return new Logger(LogCategory.ALERTS, component);
 }
 
 /**
