@@ -17,27 +17,27 @@ export async function seed(knex) {
                 last_synced_at: null,
                 credentials_ref: null,
                 created_at: knex.fn.now(),
-                updated_at: knex.fn.now()
+                updated_at: knex.fn.now(),
             },
             {
-                spreadsheet_id: "warehouse_tariffs_2024",
+                spreadsheet_id: "warehouse_tariffs_2024_spb",
                 sheet_name: "Санкт-Петербург",
                 description: "Тарифы на доставку для складов в Санкт-Петербурге и Ленинградской области",
                 is_active: true,
                 last_synced_at: null,
                 credentials_ref: null,
                 created_at: knex.fn.now(),
-                updated_at: knex.fn.now()
+                updated_at: knex.fn.now(),
             },
             {
-                spreadsheet_id: "warehouse_tariffs_2024",
+                spreadsheet_id: "warehouse_tariffs_2024_ekb",
                 sheet_name: "Екатеринбург",
                 description: "Тарифы на доставку для складов в Екатеринбурге и Свердловской области",
                 is_active: true,
                 last_synced_at: null,
                 credentials_ref: null,
                 created_at: knex.fn.now(),
-                updated_at: knex.fn.now()
+                updated_at: knex.fn.now(),
             },
             {
                 spreadsheet_id: "box_tariffs_2024",
@@ -47,18 +47,18 @@ export async function seed(knex) {
                 last_synced_at: null,
                 credentials_ref: null,
                 created_at: knex.fn.now(),
-                updated_at: knex.fn.now()
+                updated_at: knex.fn.now(),
             },
             {
-                spreadsheet_id: "box_tariffs_2024",
+                spreadsheet_id: "box_tariffs_2024_large",
                 sheet_name: "Крупногабаритные коробки",
                 description: "Тарифы на упаковку крупногабаритных коробок и специальных упаковок",
                 is_active: true,
                 last_synced_at: null,
                 credentials_ref: null,
                 created_at: knex.fn.now(),
-                updated_at: knex.fn.now()
-            }
+                updated_at: knex.fn.now(),
+            },
         ])
         .onConflict(["spreadsheet_id", "sheet_name"])
         .merge();

@@ -65,6 +65,32 @@ const knegConfigs: Record<typeof NODE_ENV, Knex.Config> = {
             extension: "js",
         },
     },
+    test: {
+        client: "pg",
+        connection: () =>
+            connectionSchema.parse({
+                host: env.POSTGRES_HOST ?? "localhost",
+                port: env.POSTGRES_PORT ?? 5432,
+                database: (env.POSTGRES_DB ?? "postgres") + "_test",
+                user: env.POSTGRES_USER ?? "postgres",
+                password: env.POSTGRES_PASSWORD ?? "postgres",
+            }),
+        pool: {
+            min: 1,
+            max: 5,
+        },
+        migrations: {
+            stub: 'src/config/knex/migration.stub.js',
+            directory: "./src/postgres/migrations",
+            tableName: "migrations",
+            extension: "js",
+        },
+        seeds: {
+            stub: 'src/config/knex/seed.stub.js',
+            directory: "./src/postgres/seeds",
+            extension: "js",
+        },
+    },
 };
 
 export default knegConfigs[NODE_ENV];

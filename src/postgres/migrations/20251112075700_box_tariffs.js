@@ -8,10 +8,7 @@ export async function up(knex) {
         table.increments("id").primary();
 
         // Связь с warehouses
-        table.integer("warehouse_id").notNullable()
-            .references("id")
-            .inTable("warehouses")
-            .onDelete("CASCADE");
+        table.integer("warehouse_id").notNullable().references("id").inTable("warehouses").onDelete("CASCADE");
 
         table.date("tariff_date").notNullable();
 
@@ -40,7 +37,7 @@ export async function up(knex) {
 
         // Уникальный constraint на (warehouse_id, tariff_date)
         table.unique(["warehouse_id", "tariff_date"], {
-            indexName: "uq_warehouse_date"
+            indexName: "uq_warehouse_date",
         });
 
         // Индексы

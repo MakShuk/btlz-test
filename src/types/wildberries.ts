@@ -107,3 +107,52 @@ export interface ApiResponse<T> {
   errorText?: string;
   additionalErrors?: string[];
 }
+
+// Типы для таблицы spreadsheets
+export interface Spreadsheet {
+  spreadsheet_id: string;
+  sheet_name: string;
+  description: string | null;
+  is_active: boolean;
+  last_synced_at: Date | null;
+  credentials_ref: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+// Интерфейс для создания spreadsheet
+export interface CreateSpreadsheetRequest {
+  spreadsheet_id: string;
+  sheet_name: string;
+  description?: string | null;
+  is_active?: boolean;
+  last_synced_at?: Date | null;
+  credentials_ref?: string | null;
+}
+
+// Интерфейс для обновления spreadsheet
+export interface UpdateSpreadsheetRequest {
+  sheet_name?: string;
+  description?: string | null;
+  is_active?: boolean;
+  last_synced_at?: Date | null;
+  credentials_ref?: string | null;
+}
+
+// Типы для работы с Google Sheets API
+export interface GoogleSheetsConfig {
+  credentials_json: string;
+  sheet_ids: string[];
+  default_sheet_name: string;
+  app_scopes: string[];
+}
+
+// Типы для синхронизации с Google Sheets
+export interface SpreadsheetSyncResult {
+  spreadsheet_id: string;
+  sheet_name: string;
+  success: boolean;
+  rows_written?: number;
+  error?: string;
+  synced_at: Date;
+}

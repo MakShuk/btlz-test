@@ -33,7 +33,7 @@ export async function up(knex) {
     await knex.schema.alterTable("spreadsheets", (table) => {
         // Уникальный индекс на (spreadsheet_id, sheet_name)
         table.unique(["spreadsheet_id", "sheet_name"], {
-            indexName: "uq_spreadsheets_id_sheet_name"
+            indexName: "uq_spreadsheets_id_sheet_name",
         });
 
         // Индексы для is_active и last_synced_at

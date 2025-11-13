@@ -76,6 +76,12 @@ PS: С наилучшими пожеланиями!
 # Wildberries API Configuration
 WB_API_TOKEN=your_wildberries_api_token_here
 WB_API_BASE_URL=https://common-api.wildberries.ru
+
+# Google Sheets Configuration
+GOOGLE_CREDENTIALS_JSON={"type":"service_account","project_id":"your-project-id",...}
+GOOGLE_SHEET_IDS=1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms
+DEFAULT_SHEET_NAME=stocks_coefs
+GOOGLE_APP_SCOPES=https://www.googleapis.com/auth/spreadsheets
 ```
 
 **Описание переменных:**
@@ -84,8 +90,44 @@ WB_API_BASE_URL=https://common-api.wildberries.ru
 |------------|----------|-----------------|
 | `WB_API_TOKEN` | API токен из личного кабинета WB (обязательный) | `eyJhbGciOiJIUz...` |
 | `WB_API_BASE_URL` | Базовый URL API Wildberries | `https://common-api.wildberries.ru` |
+| `GOOGLE_CREDENTIALS_JSON` | JSON с учетными данными сервисного аккаунта Google (обязательный) | `{"type":"service_account",...}` |
+| `GOOGLE_SHEET_IDS` | Список ID таблиц Google Sheets через запятую (обязательный) | `1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms` |
+| `DEFAULT_SHEET_NAME` | Имя листа по умолчанию для записи данных (обязательный) | `stocks_coefs` |
+| `GOOGLE_APP_SCOPES` | Scopes для Google API через запятую (необязательный) | `https://www.googleapis.com/auth/spreadsheets` |
 | `LOG_LEVEL` | Уровень логирования (debug, info, warn, error) | `info` |
 | `LOGS_TO_FILE` | Сохранять логи в файлы (true/false) | `true` |
+
+#### Настройка Google Sheets API
+
+1. **Создание сервисного аккаунта:**
+   - Перейдите в [Google Cloud Console](https://console.cloud.google.com/)
+   - Создайте новый проект или выберите существующий
+   - В разделе "IAM & Admin" → "Service Accounts" создайте новый сервисный аккаунт
+   - Сгенерируйте и скачайте JSON-ключ для сервисного аккаунта
+
+2. **Настройка доступа к таблицам:**
+   - Откройте Google Sheet, в который нужно записывать данные
+   - Нажмите "Поделиться" → "Добавить людей и группы"
+   - Введите email сервисного аккаунта (из JSON-ключа, поле `client_email`)
+   - Предоставите права "Редактор"
+
+3. **Получение ID таблицы:**
+   - Откройте нужную Google Sheet
+   - ID таблицы находится в URL между `/d/` и `/edit`
+   - Пример: `https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit`
+   - ID: `1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms`
+
+4. **Настройка переменных окружения:**
+   ```bash
+   # Содержимое скачанного JSON-ключа (в одну строку)
+   GOOGLE_CREDENTIALS_JSON='{"type":"service_account","project_id":"your-project-id",...}'
+
+   # ID таблиц (можно указать несколько через запятую)
+   GOOGLE_SHEET_IDS=1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms
+
+   # Имя листа для записи данных
+   DEFAULT_SHEET_NAME=stocks_coefs
+   ```
 
 ### Запуск приложения
 
