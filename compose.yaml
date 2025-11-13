@@ -43,3 +43,35 @@ services:
       start_period: 10s
 
     restart: unless-stopped
+
+  app:
+    container_name: btlz-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - APP_PORT=${APP_PORT}
+      - WB_API_TOKEN=${WB_API_TOKEN}
+      - WB_API_BASE_URL=${WB_API_BASE_URL}
+      - GOOGLE_CREDENTIALS_JSON=${GOOGLE_CREDENTIALS_JSON}
+      - GOOGLE_SHEET_IDS=${GOOGLE_SHEET_IDS}
+      - DEFAULT_SHEET_NAME=${DEFAULT_SHEET_NAME}
+      - GOOGLE_APP_SCOPES=${GOOGLE_APP_SCOPES}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - LOGS_DIR=${LOGS_DIR}
+      - LOGS_TO_FILE=${LOGS_TO_FILE}
+      - LOG_RAW_API_RESPONSE=${LOG_RAW_API_RESPONSE}
+    ports:
+      - "${APP_PORT}:${APP_PORT}"
+    networks:
+      - postgres-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped

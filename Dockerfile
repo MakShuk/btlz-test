@@ -26,10 +26,14 @@ RUN apk add --no-cache tini
 ENV NODE_ENV=production
 WORKDIR /app
 
+# Создаем директорию для логов и устанавливаем права
+RUN mkdir -p logs && chown -R node:node logs
+
 # Копируем необходимые артефакты
 COPY --from=deps-prod /app/node_modules ./node_modules
 COPY --from=build /app/package*.json ./
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/dist/postgres ./dist/postgres
 
 # Безопасный пользователь
 USER node

@@ -79,7 +79,7 @@ WB_API_BASE_URL=https://common-api.wildberries.ru
 
 # Google Sheets Configuration
 GOOGLE_CREDENTIALS_JSON={"type":"service_account","project_id":"your-project-id",...}
-GOOGLE_SHEET_IDS=1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms
+GOOGLE_SHEET_IDS=	1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms
 DEFAULT_SHEET_NAME=stocks_coefs
 GOOGLE_APP_SCOPES=https://www.googleapis.com/auth/spreadsheets
 ```
