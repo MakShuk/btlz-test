@@ -286,16 +286,23 @@ export class TariffsUpdater {
     trx: any
   ) {
     // Трансформация данных: преобразование "-" в NULL уже произошло в Zod схеме
+    // Расчёт коэффициента сортировки
+    const sortingCoefficient = TariffTransformer.calculateSortingCoefficient({
+      box_delivery_base: boxTariff.box_delivery_base,
+      box_delivery_marketplace_base: boxTariff.box_delivery_marketplace_base,
+      box_storage_base: boxTariff.box_storage_base,
+    });
+
     const result = await trx.raw(`
       INSERT INTO box_tariffs (
         warehouse_id, tariff_date,
         box_delivery_base, box_delivery_liter, box_delivery_coef_expr,
         box_delivery_marketplace_base, box_delivery_marketplace_liter, box_delivery_marketplace_coef_expr,
         box_storage_base, box_storage_liter, box_storage_coef_expr,
-        dt_next_box, dt_till_max,
+        dt_next_box, dt_till_max, sorting_coefficient,
         created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT (warehouse_id, tariff_date)
       DO UPDATE SET
         box_delivery_base = EXCLUDED.box_delivery_base,
@@ -309,6 +316,7 @@ export class TariffsUpdater {
         box_storage_coef_expr = EXCLUDED.box_storage_coef_expr,
         dt_next_box = EXCLUDED.dt_next_box,
         dt_till_max = EXCLUDED.dt_till_max,
+        sorting_coefficient = EXCLUDED.sorting_coefficient,
         updated_at = CURRENT_TIMESTAMP
       RETURNING *
     `, [
@@ -325,6 +333,7 @@ export class TariffsUpdater {
       boxTariff.box_storage_coef_expr,
       boxTariff.dt_next_box,
       boxTariff.dt_till_max,
+      sortingCoefficient,
     ]);
 
     const rows = result.rows || result;
@@ -358,10 +367,10 @@ export class TariffsUpdater {
         box_delivery_base, box_delivery_liter, box_delivery_coef_expr,
         box_delivery_marketplace_base, box_delivery_marketplace_liter, box_delivery_marketplace_coef_expr,
         box_storage_base, box_storage_liter, box_storage_coef_expr,
-        dt_next_box, dt_till_max,
+        dt_next_box, dt_till_max, sorting_coefficient,
         created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT (warehouse_id, tariff_date)
       DO UPDATE SET
         box_delivery_base = EXCLUDED.box_delivery_base,
@@ -375,6 +384,7 @@ export class TariffsUpdater {
         box_storage_coef_expr = EXCLUDED.box_storage_coef_expr,
         dt_next_box = EXCLUDED.dt_next_box,
         dt_till_max = EXCLUDED.dt_till_max,
+        sorting_coefficient = EXCLUDED.sorting_coefficient,
         updated_at = CURRENT_TIMESTAMP
       RETURNING *
     `, [
@@ -391,6 +401,7 @@ export class TariffsUpdater {
       tariffData.box_storage_coef_expr,
       tariffData.dt_next_box,
       tariffData.dt_till_max,
+      tariffData.sorting_coefficient,
     ]);
 
     const rows = result.rows || result;

@@ -28,6 +28,9 @@ export interface Tariff {
   dt_next_box: string | null;
   dt_till_max: Date | null;
 
+  // Коэффициент сортировки
+  sorting_coefficient: number | null;
+
   // Системные поля
   created_at: Date;
   updated_at: Date;
@@ -56,6 +59,9 @@ export interface CreateTariffRequest {
   // Метаданные
   dt_next_box?: string | null;
   dt_till_max?: Date | string | null;
+
+  // Коэффициент сортировки
+  sorting_coefficient?: number | null;
 }
 
 // Интерфейс для обновления тарифа
@@ -81,6 +87,9 @@ export interface UpdateTariffRequest {
   // Метаданные
   dt_next_box?: string | null;
   dt_till_max?: Date | string | null;
+
+  // Коэффициент сортировки
+  sorting_coefficient?: number | null;
 }
 
 /**
@@ -238,6 +247,7 @@ export class TariffService {
           box_storage_coef_expr: tariff.box_storage_coef_expr ?? null,
           dt_next_box: tariff.dt_next_box ?? null,
           dt_till_max: dtTillMax,
+          sorting_coefficient: tariff.sorting_coefficient ?? null,
         })
         .returning('*');
 
@@ -281,6 +291,7 @@ export class TariffService {
       if (tariff.box_storage_coef_expr !== undefined) updateData.box_storage_coef_expr = tariff.box_storage_coef_expr;
       if (tariff.dt_next_box !== undefined) updateData.dt_next_box = tariff.dt_next_box;
       if (tariff.dt_till_max !== undefined) updateData.dt_till_max = tariff.dt_till_max;
+      if (tariff.sorting_coefficient !== undefined) updateData.sorting_coefficient = tariff.sorting_coefficient;
 
       const [updatedTariff] = await knex<Tariff>('box_tariffs')
         .where({ id })
@@ -317,10 +328,10 @@ export class TariffService {
           box_delivery_base, box_delivery_liter, box_delivery_coef_expr,
           box_delivery_marketplace_base, box_delivery_marketplace_liter, box_delivery_marketplace_coef_expr,
           box_storage_base, box_storage_liter, box_storage_coef_expr,
-          dt_next_box, dt_till_max,
+          dt_next_box, dt_till_max, sorting_coefficient,
           created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         ON CONFLICT (warehouse_id, tariff_date)
         DO UPDATE SET
           box_delivery_base = EXCLUDED.box_delivery_base,
@@ -334,6 +345,7 @@ export class TariffService {
           box_storage_coef_expr = EXCLUDED.box_storage_coef_expr,
           dt_next_box = EXCLUDED.dt_next_box,
           dt_till_max = EXCLUDED.dt_till_max,
+          sorting_coefficient = EXCLUDED.sorting_coefficient,
           updated_at = CURRENT_TIMESTAMP
         RETURNING *
       `, [
@@ -350,6 +362,7 @@ export class TariffService {
         tariff.box_storage_coef_expr ?? null,
         tariff.dt_next_box ?? null,
         tariff.dt_till_max ?? null,
+        tariff.sorting_coefficient ?? null,
       ]);
 
       // Knex raw возвращает разные форматы в зависимости от драйвера БД
