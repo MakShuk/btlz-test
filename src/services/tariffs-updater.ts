@@ -5,6 +5,7 @@ import { BoxTariffResponse, WarehouseData, BoxTariff, WarehouseWithTariffsData }
 import knex from '#postgres/knex.js';
 import { getServiceLogger } from '../utils/logger.js';
 import { TariffTransformer } from '../utils/tariff-transformer.js';
+import { SheetsSyncService, SheetsSyncResult } from './sheets-sync-service.js';
 
 /**
  * Результат обновления тарифов
@@ -16,6 +17,7 @@ export interface TariffUpdateResult {
   tariffsProcessed: number;
   errors: string[];
   duration: number; // в миллисекундах
+  sheetsSync?: SheetsSyncResult; // результат синхронизации с Google Sheets
 }
 
 /**
@@ -41,16 +43,19 @@ export class TariffsUpdater {
   private apiClient: WildberriesApiClient;
   private warehouseService: WarehouseService;
   private tariffService: TariffService;
+  private sheetsSyncService: SheetsSyncService;
   private logger = getServiceLogger('TariffsUpdater');
 
   constructor(
     apiClient?: WildberriesApiClient,
     warehouseService?: WarehouseService,
-    tariffService?: TariffService
+    tariffService?: TariffService,
+    sheetsSyncService?: SheetsSyncService
   ) {
     this.apiClient = apiClient || new WildberriesApiClient();
     this.warehouseService = warehouseService || new WarehouseService();
     this.tariffService = tariffService || new TariffService();
+    this.sheetsSyncService = sheetsSyncService || new SheetsSyncService();
   }
 
   /**
@@ -102,6 +107,38 @@ export class TariffsUpdater {
       tariffsProcessed = processingResult.tariffsProcessed;
       errors.push(...processingResult.errors);
 
+      // Запускаем синхронизацию с Google Sheets только при успешном обновлении тарифов
+      let sheetsSync: SheetsSyncResult | undefined;
+      if (errors.length === 0) {
+        try {
+          this.logger.info('Начало синхронизации с Google Sheets', { date });
+          sheetsSync = await this.sheetsSyncService.syncAllSpreadsheets(date);
+
+          // Добавляем ошибки синхронизации в общий список ошибок
+          if (!sheetsSync.success && sheetsSync.errors.length > 0) {
+            errors.push(...sheetsSync.errors);
+          }
+
+          this.logger.info('Синхронизация с Google Sheets завершена', {
+            date,
+            success: sheetsSync.success,
+            totalSpreadsheets: sheetsSync.totalSpreadsheets,
+            successfulSyncs: sheetsSync.successfulSyncs,
+            failedSyncs: sheetsSync.failedSyncs,
+            totalRowsWritten: sheetsSync.totalRowsWritten,
+            syncDuration: sheetsSync.duration
+          });
+        } catch (syncError) {
+          const syncErrorMessage = syncError instanceof Error ? syncError.message : String(syncError);
+          errors.push(`Ошибка синхронизации с Google Sheets: ${syncErrorMessage}`);
+
+          this.logger.error('Критическая ошибка при синхронизации с Google Sheets', {
+            date,
+            error: syncErrorMessage
+          });
+        }
+      }
+
       const duration = Date.now() - startTime;
       const success = errors.length === 0;
 
@@ -111,7 +148,9 @@ export class TariffsUpdater {
         tariffsProcessed,
         errorsCount: errors.length,
         duration,
-        success
+        success,
+        sheetsSyncSuccess: sheetsSync?.success,
+        sheetsSyncRows: sheetsSync?.totalRowsWritten
       });
 
       return {
@@ -121,6 +160,7 @@ export class TariffsUpdater {
         tariffsProcessed,
         errors,
         duration,
+        sheetsSync
       };
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -136,6 +176,7 @@ export class TariffsUpdater {
         tariffsProcessed,
         errors,
         duration,
+        sheetsSync: undefined // При критической ошибке синхронизация не выполняется
       };
     }
   }

@@ -199,6 +199,9 @@ export class TariffsScheduler {
           warehousesProcessed: result.warehousesProcessed,
           tariffsProcessed: result.tariffsProcessed,
           duration: result.duration,
+          sheetsSyncSuccess: result.sheetsSync?.success,
+          sheetsSyncRows: result.sheetsSync?.totalRowsWritten,
+          sheetsSyncDuration: result.sheetsSync?.duration,
           nextRun: this.getNextRunTime()
         });
       } else {
@@ -210,6 +213,9 @@ export class TariffsScheduler {
           errorsCount: result.errors.length,
           errors: result.errors,
           duration: result.duration,
+          sheetsSyncSuccess: result.sheetsSync?.success,
+          sheetsSyncRows: result.sheetsSync?.totalRowsWritten,
+          sheetsSyncErrors: result.sheetsSync?.errors?.length || 0,
           nextRun: this.getNextRunTime()
         });
       }

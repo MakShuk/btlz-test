@@ -84,6 +84,17 @@ async function updateCommand(dateOption: string) {
       console.log(`   Тарифов обработано: ${result.tariffsProcessed}`);
       console.log(`   Длительность: ${formatDuration(result.duration)}`);
 
+      // Отображаем информацию о синхронизации с Google Sheets
+      if (result.sheetsSync) {
+        console.log(`\n📈 Синхронизация с Google Sheets:`);
+        console.log(`   Статус: ${result.sheetsSync.success ? '✅ Успешно' : '❌ С ошибками'}`);
+        console.log(`   Таблиц обработано: ${result.sheetsSync.totalSpreadsheets}`);
+        console.log(`   Успешных синхронизаций: ${result.sheetsSync.successfulSyncs}`);
+        console.log(`   Ошибок синхронизации: ${result.sheetsSync.failedSyncs}`);
+        console.log(`   Строк записано: ${result.sheetsSync.totalRowsWritten}`);
+        console.log(`   Длительность синхронизации: ${formatDuration(result.sheetsSync.duration)}`);
+      }
+
       if (result.errors.length > 0) {
         logger.warn(`⚠️  Обнаружены незначительные ошибки (${result.errors.length}):`);
         result.errors.forEach((error, index) => {
@@ -99,6 +110,18 @@ async function updateCommand(dateOption: string) {
       console.log(`   Складов обработано: ${result.warehousesProcessed}`);
       console.log(`   Тарифов обработано: ${result.tariffsProcessed}`);
       console.log(`   Длительность: ${formatDuration(result.duration)}`);
+
+      // Отображаем информацию о синхронизации с Google Sheets
+      if (result.sheetsSync) {
+        console.log(`\n📈 Синхронизация с Google Sheets:`);
+        console.log(`   Статус: ${result.sheetsSync.success ? '✅ Успешно' : '❌ С ошибками'}`);
+        console.log(`   Таблиц обработано: ${result.sheetsSync.totalSpreadsheets}`);
+        console.log(`   Успешных синхронизаций: ${result.sheetsSync.successfulSyncs}`);
+        console.log(`   Ошибок синхронизации: ${result.sheetsSync.failedSyncs}`);
+        console.log(`   Строк записано: ${result.sheetsSync.totalRowsWritten}`);
+        console.log(`   Длительность синхронизации: ${formatDuration(result.sheetsSync.duration)}`);
+      }
+
       console.log(`\n❌ Ошибки (${result.errors.length}):`);
       result.errors.forEach((error, index) => {
         console.log(`   ${index + 1}. ${error}`);
