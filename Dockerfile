@@ -34,6 +34,9 @@ COPY --from=deps-prod /app/node_modules ./node_modules
 COPY --from=build /app/package*.json ./
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/dist/postgres ./dist/postgres
+COPY --from=build /app/src/postgres ./src/postgres
+# Убедимся, что CJS seed файлы доступны в контейнере
+COPY --from=build /app/src/postgres/seeds/*.cjs ./dist/postgres/seeds/
 
 # Безопасный пользователь
 USER node

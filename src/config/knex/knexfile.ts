@@ -36,7 +36,7 @@ const knegConfigs: Record<typeof NODE_ENV, Knex.Config> = {
         seeds: {
             stub: 'src/config/knex/seed.stub.js',
             directory: "./src/postgres/seeds",
-            extension: "js",
+            extension: "cjs",
         },
     },
     production: {
@@ -55,14 +55,14 @@ const knegConfigs: Record<typeof NODE_ENV, Knex.Config> = {
         },
         migrations: {
             stub: 'dist/config/knex/migration.stub.js',
-            directory: "./dist/postgres/migrations",
+            directory: "/app/src/postgres/migrations",
             tableName: "migrations",
             extension: "js",
         },
         seeds: {
             stub: 'src/config/knex/seed.stub.js',
-            directory: "./dist/postgres/seeds",
-            extension: "js",
+            directory: "/app/dist/postgres/seeds",
+            extension: "cjs",
         },
     },
     test: {
@@ -88,7 +88,7 @@ const knegConfigs: Record<typeof NODE_ENV, Knex.Config> = {
         seeds: {
             stub: 'src/config/knex/seed.stub.js',
             directory: "./src/postgres/seeds",
-            extension: "js",
+            extension: "cjs",
         },
     },
 };
